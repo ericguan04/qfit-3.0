@@ -1,5 +1,6 @@
 #!/bin/bash
 # This script works with Phenix version 2.0.
+# Added parallelization to this script using nproc flag in phenix.refine
 
 qfit_usage() {
   echo >&2 "Usage:";
@@ -31,8 +32,11 @@ command -v remove_duplicates >/dev/null 2>&1 || {
 # Assert required files exist
 mapfile=$1
 multiconf=${2:-multiconformer_model2.pdb}
+nproc=${3:-1} # Add 3rd argument for number of processors to use in phenix.refine, default to 1 (no parallelization) if not provided
+
 echo "mapfile              : ${mapfile} $([[ -f ${mapfile} ]] || echo '[NOT FOUND]')";
 echo "qfit unrefined model : ${multiconf} $([[ -f ${multiconf} ]] || echo '[NOT FOUND]')";
+echo "processors (nproc)   : ${nproc}"
 
 echo "";
 if [[ ! -f "${mapfile}" ]] || [[ ! -f "${multiconf}" ]]; then
@@ -134,10 +138,11 @@ echo "output.serial=2"                    >> ${pdb_name}_refine.params
 echo "refinement.main.number_of_macro_cycles=5"      >> ${pdb_name}_refine.params
 echo "refinement.main.nqh_flips=False"               >> ${pdb_name}_refine.params
 echo "refinement.output.write_maps=False"            >> ${pdb_name}_refine.params
+echo "refinement.main.nproc=${nproc}"                >> ${pdb_name}_refine.params
 
 phenix.refine  "${multiconf}.f_modified.updated.pdb" \
                "${pdb_name}.mtz" \
-	           "refinement.input.monomers.file_name=elbow.multiconformer_model2_pdb_f_modified_pdb.all.cif" \
+	             "refinement.input.monomers.file_name=elbow.multiconformer_model2_pdb_f_modified_pdb.all.cif" \
                "refine.strategy=*individual_sites" \
                "output.prefix=${pdb_name}" \
                "output.serial=2" \
@@ -146,6 +151,7 @@ phenix.refine  "${multiconf}.f_modified.updated.pdb" \
                "refinement.output.write_maps=False" \
                "data_manager.miller_array.labels.name=${xray_data_labels}" \
                "xray_data.r_free_flags.generate=True" \
+               "refinement.main.nproc=${nproc}" \
                --overwrite
 
 create_restraints_file.py "${pdb_name}_002.pdb"
@@ -159,6 +165,7 @@ echo "refinement.main.number_of_macro_cycles=5"                       >> ${pdb_n
 echo "refinement.main.nqh_flips=False"                                >> ${pdb_name}_occ_refine.params
 echo "refinement.refine.${adp}"                                       >> ${pdb_name}_occ_refine.params
 echo "refinement.output.write_maps=False"                             >> ${pdb_name}_occ_refine.params
+echo "refinement.main.nproc=${nproc}"                                 >> ${pdb_name}_occ_refine.params
 
 if [ -f "elbow.${multiconf}_pdb.all.cif" ]; then
   echo "refinement.input.monomers.file_name='elbow.${multiconf}_pdb.all.cif'" >> ${pdb_name}_occ_refine.params
@@ -172,7 +179,7 @@ while [ $zeroes -gt 1 ]; do
   if [ -f "elbow.multiconformer_model2_pdb_f_modified_pdb.all.cif" ]; then
       phenix.refine "${pdb_name}_002.pdb" \
                     "${pdb_name}_002.mtz" \
-		            "refinement.input.monomers.file_name=elbow.multiconformer_model2_pdb_f_modified_pdb.all.cif" \
+		                "refinement.input.monomers.file_name=elbow.multiconformer_model2_pdb_f_modified_pdb.all.cif" \
                     "refine.strategy=*individual_sites *individual_adp *occupancies" \
                     "output.prefix=${pdb_name}" \
                     "output.serial=3" \
@@ -180,6 +187,7 @@ while [ $zeroes -gt 1 ]; do
                     "refinement.main.nqh_flips=False" \
                     "refinement.refine.${adp}" \
                     qFit_occupancy.params \
+                    "refinement.main.nproc=${nproc}" \
                     --overwrite
     else
         phenix.refine "${pdb_name}_002.pdb" \
@@ -191,6 +199,7 @@ while [ $zeroes -gt 1 ]; do
                     "refinement.main.nqh_flips=False" \
                     "refinement.refine.${adp}" \
                     qFit_occupancy.params \
+                    "refinement.main.nproc=${nproc}" \
                     --overwrite
     fi
 
@@ -246,6 +255,7 @@ echo "refinement.target_weights.optimize_adp_weight=true"  >> ${pdb_name}_final_
 echo "refinement.main.ordered_solvent=True" >> ${pdb_name}_final_refine.params
 echo "ordered_solvent.mode=every_macro_cycle" >> ${pdb_name}_final_refine.params
 echo "include_altlocs=True" >> ${pdb_name}_final_refine.params
+echo "refinement.main.nproc=${nproc}" >> ${pdb_name}_final_refine.params
 
 if [ -f "elbow.${pdb_name}_004_pdb.all.cif" ]; then
   echo "refinement.input.monomers.file_name='elbow.${pdb_name}_004_pdb.all.cif'"  >> ${pdb_name}_final_refine.params
@@ -254,7 +264,7 @@ fi
 if [ -f "elbow.${pdb_name}_004_pdb.all.cif" ]; then
       phenix.refine "${pdb_name}_002.pdb" \
             "${pdb_name}_002.mtz" \
-	        "refinement.input.monomers.file_name=elbow.${pdb_name}_004_pdb.all.cif" \
+	          "refinement.input.monomers.file_name=elbow.${pdb_name}_004_pdb.all.cif" \
             "refine.strategy=*individual_sites *individual_adp *occupancies" \
             "output.prefix=${pdb_name}" \
             "output.serial=5" \
@@ -269,6 +279,7 @@ if [ -f "elbow.${pdb_name}_004_pdb.all.cif" ]; then
             "refinement.target_weights.optimize_xyz_weight=true" \
             "refinement.target_weights.optimize_adp_weight=true" \
             qFit_occupancy.params \
+            "refinement.main.nproc=${nproc}" \
             --overwrite
  else
       phenix.refine "${pdb_name}_002.pdb" \
@@ -287,6 +298,7 @@ if [ -f "elbow.${pdb_name}_004_pdb.all.cif" ]; then
             "refinement.target_weights.optimize_xyz_weight=true" \
             "refinement.target_weights.optimize_adp_weight=true" \
             qFit_occupancy.params \
+            "refinement.main.nproc=${nproc}" \
             --overwrite
 fi
 
@@ -306,11 +318,12 @@ if [ -f "reduce_failure.pdb" ]; then
   echo "refinement.main.ordered_solvent=True"      >> ${pdb_name}_final_refine_noreduce.params
   echo "refinement.target_weights.optimize_xyz_weight=true"  >> ${pdb_name}_final_refine_noreduce.params
   echo "refinement.target_weights.optimize_adp_weight=true"  >> ${pdb_name}_final_refine_noreduce.params
+  echo "refinement.main.nproc=${nproc}" >> ${pdb_name}_final_refine_noreduce.params
 
   if [ -f "elbow.${pdb_name}_004_pdb.all.cif" ]; then
       phenix.refine "${pdb_name}_002.pdb" \
             "${pdb_name}_002.mtz" \
-	        "refinement.input.monomers.file_name=elbow.${pdb_name}_004_pdb.all.cif"
+	          "refinement.input.monomers.file_name=elbow.${pdb_name}_004_pdb.all.cif" \
             "refine.strategy=*individual_sites *individual_adp *occupancies" \
             "output.prefix=${pdb_name}" \
             "output.serial=5" \
@@ -319,12 +332,13 @@ if [ -f "reduce_failure.pdb" ]; then
             "refinement.refine.${adp}" \
             "refinement.hydrogens.refine=riding" \
             "refinement.main.ordered_solvent=True" \
-            "ordered_solvent.dist_min = 2.0" \ 
+            "ordered_solvent.dist_min = 2.0" \
             "ordered_solvent.mode=every_macro_cycle" \
             "include_altlocs=True" \
             "refinement.target_weights.optimize_xyz_weight=true" \
             "refinement.target_weights.optimize_adp_weight=true" \
             qFit_occupancy.params \
+            "refinement.main.nproc=${nproc}" \
             --overwrite
  else
       phenix.refine "${pdb_name}_002.pdb" \
@@ -343,6 +357,7 @@ if [ -f "reduce_failure.pdb" ]; then
             "refinement.target_weights.optimize_xyz_weight=true" \
             "refinement.target_weights.optimize_adp_weight=true" \
             qFit_occupancy.params \
+            "refinement.main.nproc=${nproc}" \
             --overwrite
 fi
 fi
