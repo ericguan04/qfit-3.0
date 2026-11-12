@@ -15,6 +15,39 @@ def parse_args():
     return parser.parse_args()
 
 
+def find_constraint_segments(multiconformer):
+    """
+    Yield (chain_id, resids, altlocs) for each run of consecutive
+    multi-conformer residues in one chain that have the same set of altlocs.
+
+    A residue is multi-conformer if it has at least two non-blank altlocs;
+    blank-altloc atoms are shared by all conformers and need no constraint.
+    A run ends at a single-conformer residue, at a change in the altloc set,
+    and at the end of a chain. The altloc set must be identical within a run:
+    each selection in a constrained_group gets a single occupancy, so a
+    residue lacking one of the group's altlocs would be constrained to sum
+    to less than 1. Residue ids include the insertion code.
+    """
+    for chain in multiconformer:
+        resids = []
+        altlocs = None
+        for residue in chain:
+            if residue.resn[0] not in ROTAMERS:
+                continue
+            residue_altlocs = sorted(set(residue.altloc) - {""})
+            if len(residue_altlocs) < 2:
+                residue_altlocs = None  # single conformer
+            if residue_altlocs != altlocs and resids:
+                yield chain.id, resids, altlocs
+                resids = []
+            altlocs = residue_altlocs
+            if altlocs is not None:
+                resi, icode = residue.id
+                resids.append(f"{resi}{icode}")
+        if resids:
+            yield chain.id, resids, altlocs
+
+
 def create_refine_restraints(multiconformer):
     """
     For refinement, we need to create occupancy restraints for all residues in the same segment with the same altloc.
@@ -25,42 +58,16 @@ def create_refine_restraints(multiconformer):
     f.write("refinement {\n")
     f.write("  refine {\n")
     f.write("    occupancies {\n")
-    resi_ = []
-    altloc_ = []
-    chain_ = []
-    for chain in multiconformer:
-        for residue in chain:
-            if residue.resn[0] in ROTAMERS:
-                if len(residue.extract("name", "CA", "==").q) == 1:
-                    # if something exists in the list, print it
-                    if len(resi_) > 0:  # something exists and we should write it out
-                        for a in set(altloc_):
-                            # create a string from each value in the resi array
-                            # resi_str = ','.join(map(str, resi_))
-                            f.write("      constrained_group {\n")
-                            for l in range(0, len(resi_)):
-                                # make string for each residue and concat the strings together
-                                if l == 0:
-                                    resi_selection = f"((chain {chain_[0]} and resseq {resi_[l]})"  # first residue
-                                else:
-                                    resi_selection = (
-                                        resi_selection
-                                        + f" or (chain {chain_[0]} and resseq {resi_[l]})"
-                                    )
-                            f.write(
-                                f"        selection = altid {a} and {resi_selection})\n"
-                            )
-                            f.write("             }\n")
-                    resi_ = []
-                    altloc_ = []
-                    chain_ = []
-                else:
-                    for alt in list(set(residue.altloc)):
-                        # only append if it does not already exist in array
-                        if residue.resi[0] not in resi_:
-                            resi_.append(residue.resi[0])
-                        chain_.append(residue.chain[0])
-                        altloc_.append(alt[0])
+    for chain_id, resids, altlocs in find_constraint_segments(multiconformer):
+        # One group per segment, with one selection per altloc, so that phenix
+        # constrains the altloc occupancies of the segment to sum to 1.
+        resi_selection = " or ".join(
+            f"(chain {chain_id} and resid {resid})" for resid in resids
+        )
+        f.write("      constrained_group {\n")
+        for a in altlocs:
+            f.write(f"        selection = altid {a} and ({resi_selection})\n")
+        f.write("      }\n")
     f.write("   }\n")
     f.write(" }\n")
     f.write("}\n")
