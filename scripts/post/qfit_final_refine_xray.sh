@@ -89,16 +89,26 @@ else
 fi
 
 #_____________________________DETERMINE R FREE FLAGS______________________________
+# Refine against the free set already in the .mtz, so that Rfree is comparable
+# with earlier refinements. Only generate new flags if there are none.
 gen_Rfree=True
-rfreetypes="FREE R-free-flags"
+rfree_label=""
+rfreetypes="FREE R-free-flags FreeR_flag"
 for field in ${rfreetypes}; do
-  if grep -F -q -w $field <<< "${mtzmetadata}"; then
+  # Match the whole column label (e.g. R-free-flags, but not R-free-flags-1)
+  if awk -v label="${field}" '$1 == label {found=1} END {exit !found}' <<< "${mtzmetadata}"; then
     gen_Rfree=False;
-    echo "Rfree column: ${rfield}";
-    echo "miller_array.labels.name=${rfield}" >> ${pdb_name}_refine.params
+    rfree_label="${field}"
+    echo "Rfree column: ${rfree_label}";
+    echo "data_manager.miller_array.labels.name=${rfree_label}" >> ${pdb_name}_refine.params
     break
   fi
 done
+if [ -z "${rfree_label}" ]; then
+  echo >&2 "[WARNING] qfit_final_refine_xray.sh:: No R-free flags (${rfreetypes}) found in ${pdb_name}.mtz.";
+  echo >&2 "          Generating a NEW set of R-free flags. Rfree will not be comparable";
+  echo >&2 "          to refinements that used a different free set.";
+fi
 echo "xray_data.r_free_flags.generate=${gen_Rfree}" >> ${pdb_name}_refine.params
 
 #__________________________________REMOVE DUPLICATE HET ATOMS__________________________________
@@ -145,7 +155,8 @@ phenix.refine  "${multiconf}.f_modified.updated.pdb" \
                "refinement.main.nqh_flips=False" \
                "refinement.output.write_maps=False" \
                "data_manager.miller_array.labels.name=${xray_data_labels}" \
-               "xray_data.r_free_flags.generate=True" \
+               ${rfree_label:+"data_manager.miller_array.labels.name=${rfree_label}"} \
+               "xray_data.r_free_flags.generate=${gen_Rfree}" \
                --overwrite
 
 create_restraints_file.py "${pdb_name}_002.pdb"
