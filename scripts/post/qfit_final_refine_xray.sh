@@ -303,6 +303,7 @@ if [ -f "elbow.${pdb_name}_004_pdb.all.cif" ]; then
             "refinement.target_weights.optimize_xyz_weight=true" \
             "refinement.target_weights.optimize_adp_weight=true" \
             "optimize_mask=True" \
+            qFit_occupancy.params \
             --overwrite
 fi
 
@@ -340,6 +341,7 @@ if [ -f "reduce_failure.pdb" ]; then
             "refinement.target_weights.optimize_xyz_weight=true" \
             "refinement.target_weights.optimize_adp_weight=true" \
             "optimize_mask=True" \
+            qFit_occupancy.params \
             --overwrite
  else
       phenix.refine "${pdb_name}_002.pdb" \
@@ -357,6 +359,7 @@ if [ -f "reduce_failure.pdb" ]; then
             "refinement.target_weights.optimize_xyz_weight=true" \
             "refinement.target_weights.optimize_adp_weight=true" \
             "optimize_mask=True" \
+            qFit_occupancy.params \
             --overwrite
 fi
 fi
