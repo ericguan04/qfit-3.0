@@ -514,8 +514,11 @@ def main():
             elif args.run_rotamer:
                 collapse_conformers_by_rotamer(residue, args.angle_tol)
             else:
+                # Count only residues that lose a conformer: the final
+                # refinement script loops until this count reaches 1 or less.
+                if np.any(residue.q < args.occ_cutoff):
+                    n_removed += 1
                 redistribute_occupancies_by_residue(residue, args.occ_cutoff)
-                n_removed += 1
 
     # Create structure without low occupancy confs (culling)
     structure = structure.copy().get_selected_structure(~mask).reorder()
