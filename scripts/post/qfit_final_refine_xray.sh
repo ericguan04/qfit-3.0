@@ -327,7 +327,7 @@ if [ -f "reduce_failure.pdb" ]; then
   if [ -f "elbow.${pdb_name}_004_pdb.all.cif" ]; then
       phenix.refine "${pdb_name}_002.pdb" \
             "${pdb_name}_002.mtz" \
-	    "refinement.input.monomers.file_name=elbow.${pdb_name}_004_pdb.all.cif"
+	    "refinement.input.monomers.file_name=elbow.${pdb_name}_004_pdb.all.cif" \
             "refine.strategy=*individual_sites *individual_adp *occupancies" \
             "output.prefix=${pdb_name}" \
             "output.serial=5" \
